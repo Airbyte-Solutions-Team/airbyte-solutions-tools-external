@@ -1,0 +1,8 @@
+# Requirements for prefect_airbyte_sample.py
+
+# Prefect workflow orchestration
+prefect>=2.14.0,<3.0.0
+
+# HTTP client with async support
+httpx>=0.25.0,<1.0.0
+
