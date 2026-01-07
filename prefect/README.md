@@ -146,4 +146,4 @@ If jobs are timing out:
 
 ## License
 
-This is a sample script provided for demonstration purposes.
+This is a sample script provided for demonstration purposes under the ELv2 license.
