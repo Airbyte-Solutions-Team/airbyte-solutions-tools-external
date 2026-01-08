@@ -1,0 +1,13 @@
+# Copy this file to config.yaml and fill in your credentials
+
+# Source Airbyte instance (where connections will be exported from)
+source:
+  base_url: "https://api.airbyte.com/v1"
+  client_id: "your_source_client_id"
+  client_secret: "your_source_client_secret"
+
+# Destination Airbyte instance (where connections will be imported to)
+destination:
+  base_url: "https://api.airbyte.com/v1"
+  client_id: "your_destination_client_id"
+  client_secret: "your_destination_client_secret"
