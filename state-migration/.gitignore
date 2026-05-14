@@ -1,0 +1,55 @@
+# Virtual environment
+venv/
+.venv/
+env/
+ENV/
+
+# Migration output (state payloads, audit logs)
+migration-output/
+*-output/
+
+# Local connection name lists
+connections.txt
+connections.csv
+connections.json
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets / local config
+.env
+.env.*
+!.env.example
+secrets.json
+config.yaml
+config.local.*

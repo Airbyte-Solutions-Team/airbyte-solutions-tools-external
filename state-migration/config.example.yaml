@@ -1,0 +1,32 @@
+# Airbyte state-migration config.
+source:
+  workspace_id: 00000000-0000-0000-0000-000000000000
+  client_id: <source_client_id>
+  client_secret: <source_client_secret>
+
+  # Public API root.
+  #   Airbyte Cloud:   https://api.airbyte.com/v1
+  #   Self-managed:    https://<webapp_url>/api/public/v1
+  public_api_root: https://<source_webapp_url>/api/public/v1
+
+  # Config API root (non-public).
+  #   Airbyte Cloud:   https://cloud.airbyte.com/api
+  #   Self-managed:    https://<webapp_url>/api
+  config_api_root: https://<source_webapp_url>/api
+
+target:
+  # `public_api_root` and `config_api_root` default to Airbyte Cloud
+  workspace_id: 00000000-0000-0000-0000-000000000000
+  client_id: <target_client_id>
+  client_secret: <target_client_secret>
+
+options:
+  # Path to the list of expected connection names. Required for `export`.
+  connection_names_file: connections.txt
+
+  # If true, `apply` logs what would be written but doesn't actually write.
+  dry_run: true
+
+  # If true, `apply` overwrites target state even when it is already non-empty.
+  # Leave false unless you have an explicit reason.
+  allow_overwrite: false
