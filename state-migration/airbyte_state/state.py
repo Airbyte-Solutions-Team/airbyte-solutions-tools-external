@@ -84,6 +84,6 @@ def is_target_writable(existing_state: Dict[str, Any]) -> bool:
         return True
     if state_type == "global":
         global_state = existing_state.get("globalState") or {}
-        if not global_state.get("streamStates") and not global_state.get("shared_state"):
+        if not global_state.get("streamStates") and not global_state.get("sharedState"):
             return True
     return False
