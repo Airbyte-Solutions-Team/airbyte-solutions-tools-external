@@ -1,0 +1,5 @@
+# One connection name per line. Blank lines and lines starting with '#' are ignored.
+# Names must match the connection name in both the source and target workspaces exactly.
+salesforce-to-bigquery
+github-to-snowflake
+amazon-seller-partner-to-redshift
