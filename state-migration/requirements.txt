@@ -1,2 +1,2 @@
-airbyte>=0.45.0
+airbyte==0.45.0
 PyYAML>=6.0
