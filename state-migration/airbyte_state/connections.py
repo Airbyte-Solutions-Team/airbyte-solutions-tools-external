@@ -86,8 +86,8 @@ def validate_expected(
 def connection_id(connection: Dict[str, Any]) -> str:
     """Pull the connectionId out of a connection record, regardless of API source.
 
-    The public API returns `connectionId`; the internal fallback may return
-    `connectionId` or `connection_id` depending on the version.
+    PyAirbyte returns `connectionId`; older internal API records may return
+    `connection_id`.
     """
     for key in ("connectionId", "connection_id"):
         value = connection.get(key)

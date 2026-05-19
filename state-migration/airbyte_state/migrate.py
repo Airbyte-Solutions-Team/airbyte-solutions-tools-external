@@ -20,8 +20,7 @@ import os
 from typing import Any, Dict, List
 
 from .audit import AuditEntry, AuditLog
-from .auth import ClientCredentials, fetch_access_token
-from .clients import ApiError, ConfigApiClient, PublicApiClient
+from .clients import AirbyteWorkspaceClient, ApiError
 from .config import (
     Config,
     ConfigError,
@@ -50,11 +49,11 @@ log = logging.getLogger("airbyte_state.migrate")
 
 EXPORT_SCHEMA_VERSION = 1
 
-# Airbyte's ConnectionStatus enum is `active | inactive | deprecated | locked`.
-# Only `active` is unsafe to write to (a sync could be running). The other
-# three are all non-running and accept state writes.
-_SAFE_TARGET_STATUSES = {"inactive", "deprecated", "locked"}
-_UNUSUAL_TARGET_STATUSES = {"deprecated", "locked"}
+# Airbyte's public API ConnectionStatus enum includes
+# `active | inactive | deprecated`. Some older/internal API records may also
+# report `locked`. Deprecated connections are not valid migration targets.
+_SAFE_TARGET_STATUSES = {"inactive", "locked"}
+_UNUSUAL_TARGET_STATUSES = {"locked"}
 
 
 class MigrationFailed(RuntimeError):
@@ -66,20 +65,21 @@ class ExportFileError(RuntimeError):
 
 
 class _Environment:
-    """Bundle of clients for one workspace, with an access token already fetched."""
+    """Bundle the configured workspace with its PyAirbyte client."""
 
     def __init__(self, env: EnvironmentConfig, label: str):
         self.label = label
         self.workspace_id = env.workspace_id
-        self.public_api_root = env.public_api_root
+        self.api_root = env.api_root
         self.config_api_root = env.config_api_root
-        log.info("Exchanging %s credentials for an access token", label)
-        token = fetch_access_token(
-            env.public_api_root,
-            ClientCredentials(client_id=env.client_id, client_secret=env.client_secret),
+        log.info("Initializing %s PyAirbyte workspace client", label)
+        self.client = AirbyteWorkspaceClient(
+            api_root=env.api_root,
+            workspace_id=env.workspace_id,
+            client_id=env.client_id,
+            client_secret=env.client_secret,
+            config_api_root=env.config_api_root,
         )
-        self.public = PublicApiClient(env.public_api_root, token)
-        self.config = ConfigApiClient(env.config_api_root, token)
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +103,7 @@ def run_export(cfg: Config) -> Dict[str, Any]:
     source = _Environment(source_env, "source")
 
     log.info("Listing source workspace connections")
-    source_conns = _list_connections(source, cfg.options.use_internal_list)
+    source_conns = _list_connections(source, expected_names, cfg.options.use_internal_list)
     source_map = build_name_map(source_conns, expected_names, workspace_label="source")
     validate_expected(expected_names, source_map, workspace_label="source")
 
@@ -112,7 +112,7 @@ def run_export(cfg: Config) -> Dict[str, Any]:
     for name in expected_names:
         cid = connection_id(source_map[name])
         log.info("  -> %s (%s)", name, cid)
-        state = source.config.get_state(cid)
+        state = source.client.get_state(cid)
         state_type = validate_state_response(name, state)
         connections_payload[name] = {
             "source_connection_id": cid,
@@ -126,7 +126,7 @@ def run_export(cfg: Config) -> Dict[str, Any]:
         "metadata": {
             "exported_at": _iso_now(),
             "source_workspace_id": source.workspace_id,
-            "source_public_api_root": source.public_api_root,
+            "source_api_root": source.api_root,
             "source_config_api_root": source.config_api_root,
             "connection_count": len(connections_payload),
         },
@@ -160,7 +160,8 @@ def run_apply(cfg: Config) -> AuditLog:
     target = _Environment(target_env, "target")
 
     log.info("Listing target workspace connections")
-    target_conns = _list_connections(target, cfg.options.use_internal_list)
+    target_conns = _list_connections(target, expected_names, cfg.options.use_internal_list)
+    target_conns = _filter_deprecated_target_connections(target_conns)
     target_map = build_name_map(target_conns, expected_names, workspace_label="target")
     validate_expected(expected_names, target_map, workspace_label="target")
 
@@ -187,7 +188,7 @@ def run_apply(cfg: Config) -> AuditLog:
             _ensure_target_safe_for_write(name, target_record)
             _apply_single(
                 cfg=cfg,
-                target_config=target.config,
+                target_client=target.client,
                 source_state=source_state,
                 target_cid=target_cid,
                 entry=entry,
@@ -229,6 +230,12 @@ def _ensure_target_safe_for_write(name: str, target_record: Dict[str, Any]) -> N
             "the connection in Airbyte before applying state to avoid writing "
             "during a running sync."
         )
+    if status == "deprecated":
+        raise ConnectionValidationError(
+            f"Target connection {name!r} has status 'deprecated'. Deprecated "
+            "connections are ignored during target matching and cannot receive "
+            "migrated state."
+        )
     if status in _SAFE_TARGET_STATUSES:
         if status in _UNUSUAL_TARGET_STATUSES:
             log.warning(
@@ -245,7 +252,7 @@ def _ensure_target_safe_for_write(name: str, target_record: Dict[str, Any]) -> N
 
 def _apply_single(
     cfg: Config,
-    target_config: ConfigApiClient,
+    target_client: AirbyteWorkspaceClient,
     source_state: Dict[str, Any],
     target_cid: str,
     entry: AuditEntry,
@@ -259,7 +266,7 @@ def _apply_single(
         return
 
     if not cfg.options.allow_overwrite:
-        existing = target_config.get_state(target_cid)
+        existing = target_client.get_state(target_cid)
         if not is_target_writable(existing):
             raise StateValidationError(
                 f"Target connection {entry.connection_name!r} already has non-empty state "
@@ -279,7 +286,7 @@ def _apply_single(
         )
         return
 
-    target_config.create_or_update_state_safe(target_cid, target_payload)
+    target_client.import_state(target_cid, target_payload)
     entry.write_status = "written"
     log.info("  ✓ %s: wrote stateType=%s to %s", entry.connection_name, state_type, target_cid)
 
@@ -319,10 +326,39 @@ def _load_export_file(path: str) -> Dict[str, Any]:
     return doc
 
 
-def _list_connections(env: _Environment, use_internal: bool) -> List[Dict[str, Any]]:
+def _list_connections(
+    env: _Environment,
+    expected_names: List[str],
+    use_internal: bool,
+) -> List[Dict[str, Any]]:
     if use_internal:
-        return env.config.list_connections(env.workspace_id)
-    return env.public.list_connections(env.workspace_id)
+        log.warning(
+            "options.use_internal_list is no longer used; listing connections with PyAirbyte."
+        )
+    return env.client.list_connections(names=expected_names)
+
+
+def _filter_deprecated_target_connections(
+    connections: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    filtered: List[Dict[str, Any]] = []
+    for record in connections:
+        if record.get("status") == "deprecated":
+            log.warning(
+                "Ignoring deprecated target connection %r (%s) during name matching.",
+                record.get("name"),
+                _safe_connection_id_for_log(record),
+            )
+            continue
+        filtered.append(record)
+    return filtered
+
+
+def _safe_connection_id_for_log(connection: Dict[str, Any]) -> str:
+    try:
+        return connection_id(connection)
+    except ConnectionValidationError:
+        return "<unknown>"
 
 
 def _iso_now() -> str:

@@ -12,17 +12,17 @@ class ConfigError(RuntimeError):
     pass
 
 
-CLOUD_PUBLIC_API_ROOT = "https://api.airbyte.com/v1"
-CLOUD_CONFIG_API_ROOT = "https://cloud.airbyte.com/api"
+CLOUD_API_ROOT = "https://api.airbyte.com/v1"
+CLOUD_CONFIG_API_ROOT = "https://cloud.airbyte.com/api/v1"
 
 
 @dataclass(frozen=True)
 class EnvironmentConfig:
-    public_api_root: str
-    config_api_root: str
+    api_root: str
     workspace_id: str
     client_id: str
     client_secret: str
+    config_api_root: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -44,8 +44,7 @@ class Config:
 
 
 _REQUIRED_ENV_FIELDS = (
-    "public_api_root",
-    "config_api_root",
+    "api_root",
     "workspace_id",
     "client_id",
     "client_secret",
@@ -72,8 +71,7 @@ def load_config(path: str) -> Config:
             raw.get("target"),
             "target",
             defaults={
-                "public_api_root": CLOUD_PUBLIC_API_ROOT,
-                "config_api_root": CLOUD_CONFIG_API_ROOT,
+                "api_root": CLOUD_API_ROOT,
             },
         ),
         options=_parse_options(raw.get("options")),
@@ -101,11 +99,24 @@ def _parse_env(
         if v is not None:
             merged[k] = v
 
+    if not merged.get("api_root") and merged.get("public_api_root"):
+        merged["api_root"] = merged["public_api_root"]
+    if not merged.get("config_api_root"):
+        merged["config_api_root"] = _derive_config_api_root(str(merged.get("api_root", "")))
+    else:
+        merged["config_api_root"] = _normalize_config_api_root(str(merged["config_api_root"]))
+
     missing = [k for k in _REQUIRED_ENV_FIELDS if not merged.get(k)]
     if missing:
         raise ConfigError(f"'{label}' section missing required field(s): {missing}")
 
-    return EnvironmentConfig(**{k: str(merged[k]) for k in _REQUIRED_ENV_FIELDS})
+    return EnvironmentConfig(
+        api_root=str(merged["api_root"]),
+        workspace_id=str(merged["workspace_id"]),
+        client_id=str(merged["client_id"]),
+        client_secret=str(merged["client_secret"]),
+        config_api_root=_optional_str(merged.get("config_api_root")),
+    )
 
 
 def _parse_options(value: Any) -> Options:
@@ -135,6 +146,23 @@ def _optional_str(value: Any) -> Optional[str]:
     if value is None:
         return None
     return str(value)
+
+
+def _derive_config_api_root(api_root: str) -> Optional[str]:
+    suffix = "/api/public/v1"
+    normalized = api_root.rstrip("/")
+    if normalized == CLOUD_API_ROOT:
+        return CLOUD_CONFIG_API_ROOT
+    if normalized.endswith(suffix):
+        return normalized[: -len(suffix)] + "/api/v1"
+    return None
+
+
+def _normalize_config_api_root(config_api_root: str) -> str:
+    normalized = config_api_root.rstrip("/")
+    if normalized.endswith("/api"):
+        return normalized + "/v1"
+    return normalized
 
 
 def _as_bool(value: Any, field: str) -> bool:

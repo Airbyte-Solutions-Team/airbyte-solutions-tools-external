@@ -11,7 +11,6 @@ import argparse
 import logging
 import sys
 
-from airbyte_state.auth import AuthError
 from airbyte_state.clients import ApiError
 from airbyte_state.config import ConfigError, load_config
 from airbyte_state.connections import ConnectionValidationError
@@ -78,7 +77,6 @@ def main(argv: list[str] | None = None) -> int:
             raise ConfigError(f"Unknown command: {args.command!r}")
         return 0
     except (
-        AuthError,
         ApiError,
         ConfigError,
         ConnectionValidationError,

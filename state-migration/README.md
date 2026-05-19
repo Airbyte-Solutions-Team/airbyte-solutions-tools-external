@@ -30,16 +30,16 @@ All configuration lives in `config.yaml`. The CLI is just two subcommands — `e
 
 `export` only reads the `source` section of the config; `apply` only reads the `target` section. Both read `options`.
 
-Each environment supplies its own client ID + secret. The script manages the exchange of client ID + secret for the necessary token.
-
 <details>
 <summary>Overriding target URLs</summary>
-The default target is Airbyte Cloud. `target.public_api_root` and `target.config_api_root` are optional and default to `https://api.airbyte.com/v1` and `https://cloud.airbyte.com/api` respectively.
+The default target is Airbyte Cloud. `target.api_root` is optional and defaults to `https://api.airbyte.com/v1`; `target.config_api_root` defaults to `https://cloud.airbyte.com/api/v1`.
 
 Override them only if migrating to a non-Cloud destination.
 </details>
 
-The source's `public_api_root` and `config_api_root` are required because the source is typically a self-hosted instance and varies as a result. 
+The source's `api_root` is required because the source is typically a self-hosted instance and varies as a result.
+
+Internal libraries also need the Config API root. For Airbyte Cloud, the tool maps `https://api.airbyte.com/v1` to `https://cloud.airbyte.com/api/v1`. For self-managed instances, set `config_api_root` to `https://<source_webapp_url>/api/v1`, or omit it when `api_root` ends with `/api/public/v1` and the tool will derive that value automatically.
 
 Example config (migrating from self-hosted to Airbyte Cloud):
 
@@ -47,8 +47,8 @@ Example config (migrating from self-hosted to Airbyte Cloud):
 # Source is where we are pulling state from
 source:
   # <source_webapp_url> is the domain of your self-hosted environment; for example: airbyte.contoso.com 
-  public_api_root: https://<source_webapp_url>/api/public/v1
-  config_api_root: https://<source_webapp_url>/api 
+  api_root: https://<source_webapp_url>/api/public/v1
+  config_api_root: https://<source_webapp_url>/api/v1
   workspace_id: 00000000-0000-0000-0000-000000000000 
   client_id: <source_client_id>
   client_secret: <source_client_secret>
@@ -85,7 +85,7 @@ This tool will:
 - Fail on non-empty target state unless `options.allow_overwrite: true`
 - Skip writes when the source `stateType` is `not_set`
 - Fail any target connection whose `status` is `active` — disable or pause the connection in Airbyte (or Terraform) before applying
-- Use the safe `create_or_update_safe` endpoint, which refuses to write while a sync is running
+- Ignore deprecated target connections when matching by name, so deprecated-only matches fail as missing targets
 
 You are responsible for everything outside the script — in particular:
 
@@ -111,7 +111,7 @@ python migrate_airbyte_state.py apply --config config.yaml
 Everything is written to `options.output_dir`:
 
 `export` writes:
-- `state_export.json` (or whatever `options.export_file` points to). Each entry in the JSON contains the source connection ID, state type, the raw `/v1/state/get` payload, and an export timestamp. The file also includes a `schema_version` and a `metadata` block describing where it came from for future proofing.
+- `state_export.json` (or whatever `options.export_file` points to). Each entry in the JSON contains the source connection ID, state type, the raw state payload, and an export timestamp. The file also includes a `schema_version` and a `metadata` block describing where it came from for future proofing.
 
 `apply` writes:
 - `state_write_audit.csv` — one row per connection with columns:

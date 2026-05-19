@@ -4,18 +4,19 @@ source:
   client_id: <source_client_id>
   client_secret: <source_client_secret>
 
-  # Public API root.
+  # PyAirbyte API root.
   #   Airbyte Cloud:   https://api.airbyte.com/v1
   #   Self-managed:    https://<webapp_url>/api/public/v1
-  public_api_root: https://<source_webapp_url>/api/public/v1
+  api_root: https://<source_webapp_url>/api/public/v1
 
-  # Config API root (non-public).
-  #   Airbyte Cloud:   https://cloud.airbyte.com/api
-  #   Self-managed:    https://<webapp_url>/api
-  config_api_root: https://<source_webapp_url>/api
+  # Config API root. Required by PyAirbyte raw state helpers for self-managed instances.
+  # Defaults to https://<source_webapp_url>/api/v1 when api_root ends with /api/public/v1.
+  config_api_root: https://<source_webapp_url>/api/v1
 
 target:
-  # `public_api_root` and `config_api_root` default to Airbyte Cloud
+  # `api_root` and `config_api_root` default to Airbyte Cloud:
+  #   api_root:        https://api.airbyte.com/v1
+  #   config_api_root: https://cloud.airbyte.com/api/v1
   workspace_id: 00000000-0000-0000-0000-000000000000
   client_id: <target_client_id>
   client_secret: <target_client_secret>
