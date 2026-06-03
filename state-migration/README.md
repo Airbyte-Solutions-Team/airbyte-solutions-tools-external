@@ -3,7 +3,7 @@
 > [!NOTE]
 > This tool is experimental code that is not supported like other [Airbyte](https://airbyte.com) projects, and is provided for reference purposes only. For assistance with this project, please use this repository's [Issues tab](https://github.com/Airbyte-Solutions-Team/airbyte-solutions-tools-external/issues) to report any faults or feature requests.
 
-A simple Python tool to migrate Airbyte connection state from one workspace to another after Terraform has created equivalent target connections. The migration runs in two steps:
+This is a simple Python tool to migrate Airbyte connection state from one workspace to another after Terraform has created equivalent target connections. The migration runs in two steps:
 
 1. `export` — pulls source state and writes it to a JSON file keyed by connection name
 2. `apply` — reads the generated JSON file and writes state to the matching target connections
@@ -40,6 +40,27 @@ Override them only if migrating to a non-Cloud destination.
 The source's `api_root` is required because the source is typically a self-hosted instance and varies as a result.
 
 Internal libraries also need the Config API root. For Airbyte Cloud, the tool maps `https://api.airbyte.com/v1` to `https://cloud.airbyte.com/api/v1`. For self-managed instances, set `config_api_root` to `https://<source_webapp_url>/api/v1`, or omit it when `api_root` ends with `/api/public/v1` and the tool will derive that value automatically.
+
+### Legacy Airbyte OSS instances (pre-0.63)
+
+Older Airbyte OSS installations only expose the internal Config API with HTTP Basic Authentication — the public API (`/api/public/v1`) and OAuth client credentials do not exist on these versions.
+
+Set `legacy_install: true` in the source (or target) section to use direct Config API calls with Basic Auth instead of PyAirbyte:
+
+```yaml
+source:
+  legacy_install: true
+  config_api_root: https://<source_webapp_url>/api/v1
+  workspace_id: 00000000-0000-0000-0000-000000000000
+  basic_auth_username: airbyte       # default OSS username
+  basic_auth_password: password      # default OSS password
+```
+
+When `legacy_install` is `true`:
+- `client_id` / `client_secret` are **not required** (OAuth is not used)
+- `config_api_root` **is required** (the tool calls the Config API directly)
+- `api_root` is optional (unused in legacy mode)
+- The tool calls `POST /connections/list`, `POST /state/get`, and `POST /state/create_or_update` on the Config API with Basic Auth
 
 Example config (migrating from self-hosted to Airbyte Cloud):
 

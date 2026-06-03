@@ -20,7 +20,7 @@ import os
 from typing import Any, Dict, List
 
 from .audit import AuditEntry, AuditLog
-from .clients import AirbyteWorkspaceClient, ApiError
+from .clients import AirbyteWorkspaceClient, ApiError, LegacyAirbyteClient
 from .config import (
     Config,
     ConfigError,
@@ -72,14 +72,26 @@ class _Environment:
         self.workspace_id = env.workspace_id
         self.api_root = env.api_root
         self.config_api_root = env.config_api_root
-        log.info("Initializing %s PyAirbyte workspace client", label)
-        self.client = AirbyteWorkspaceClient(
-            api_root=env.api_root,
-            workspace_id=env.workspace_id,
-            client_id=env.client_id,
-            client_secret=env.client_secret,
-            config_api_root=env.config_api_root,
-        )
+
+        if env.legacy_install:
+            log.info(
+                "Initializing %s legacy client (Basic Auth → Config API)", label
+            )
+            self.client = LegacyAirbyteClient(
+                config_api_root=env.config_api_root,
+                workspace_id=env.workspace_id,
+                basic_auth_username=env.basic_auth_username,
+                basic_auth_password=env.basic_auth_password,
+            )
+        else:
+            log.info("Initializing %s PyAirbyte workspace client", label)
+            self.client = AirbyteWorkspaceClient(
+                api_root=env.api_root,
+                workspace_id=env.workspace_id,
+                client_id=env.client_id,
+                client_secret=env.client_secret,
+                config_api_root=env.config_api_root,
+            )
 
 
 # ---------------------------------------------------------------------------

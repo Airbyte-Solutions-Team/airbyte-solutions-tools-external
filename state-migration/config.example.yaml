@@ -13,6 +13,13 @@ source:
   # Defaults to https://<source_webapp_url>/api/v1 when api_root ends with /api/public/v1.
   config_api_root: https://<source_webapp_url>/api/v1
 
+  # Set to true for older Airbyte OSS instances (pre-0.63) that only expose the
+  # internal Config API with Basic Auth. When true, client_id/client_secret are
+  # not required; use basic_auth_username/basic_auth_password instead.
+  # legacy_install: true
+  # basic_auth_username: airbyte
+  # basic_auth_password: password
+
 target:
   # `api_root` and `config_api_root` default to Airbyte Cloud:
   #   api_root:        https://api.airbyte.com/v1
