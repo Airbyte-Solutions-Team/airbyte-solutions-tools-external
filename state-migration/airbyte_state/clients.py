@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import base64
+import logging
 import os
 from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List, Optional
+
+import requests
+
+log = logging.getLogger("airbyte_state.clients")
 
 
 class ApiError(RuntimeError):
@@ -141,3 +147,93 @@ def _api_error(context: str, exc: Exception) -> ApiError:
     if status:
         return ApiError(f"{context} failed: {status} ({detail})", status=status, body=body)
     return ApiError(f"{context} failed: {detail}", body=body)
+
+
+class LegacyAirbyteClient:
+    """Direct HTTP client for Airbyte OSS instances using Basic Auth.
+
+    Targets the internal Config API (POST /api/v1/...) which is the only
+    API available on older Airbyte OSS versions (pre-0.63).
+    """
+
+    def __init__(
+        self,
+        config_api_root: str,
+        workspace_id: str,
+        basic_auth_username: str,
+        basic_auth_password: str,
+    ):
+        self.config_api_root = config_api_root.rstrip("/")
+        self.workspace_id = workspace_id
+        credentials = f"{basic_auth_username}:{basic_auth_password}"
+        encoded = base64.b64encode(credentials.encode()).decode()
+        self._headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Basic {encoded}",
+        }
+        self._session = requests.Session()
+        self._session.headers.update(self._headers)
+
+    def _post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        url = f"{self.config_api_root}/{path.lstrip('/')}"
+        log.debug("POST %s", url)
+        try:
+            resp = self._session.post(url, json=body, timeout=60)
+        except requests.RequestException as exc:
+            raise ApiError(f"Request to {url} failed: {exc}") from exc
+
+        if resp.status_code >= 400:
+            raise ApiError(
+                f"POST {path} returned {resp.status_code}",
+                status=resp.status_code,
+                body=resp.text,
+            )
+        return resp.json()
+
+    def list_connections(self, names: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """List connections in the workspace via the Config API."""
+        payload: Dict[str, Any] = {"workspaceId": self.workspace_id}
+        data = self._post("connections/list", payload)
+        connections = data.get("connections", [])
+
+        records = []
+        for conn in connections:
+            record = {
+                "name": conn.get("name", ""),
+                "connectionId": conn.get("connectionId", ""),
+                "status": (conn.get("status") or "").lower(),
+            }
+            records.append(record)
+
+        if names is not None:
+            name_set = set(names)
+            records = [r for r in records if r["name"] in name_set]
+
+        return records
+
+    def get_state(self, connection_id: str) -> Dict[str, Any]:
+        """Fetch connection state via POST /state/get."""
+        data = self._post("state/get", {"connectionId": connection_id})
+        if not isinstance(data, dict):
+            raise ApiError(
+                f"Config API returned {type(data).__name__} for state; expected dict."
+            )
+        return data
+
+    def import_state(self, connection_id: str, connection_state: Dict[str, Any]) -> Dict[str, Any]:
+        """Write connection state via POST /state/create_or_update.
+
+        The Config API expects a `ConnectionStateCreateOrUpdate` envelope with
+        `connectionId` at the top level and the state nested under `connectionState`.
+        """
+        body = {
+            "connectionId": connection_id,
+            "connectionState": {
+                **connection_state,
+                "connectionId": connection_id,
+            },
+        }
+        data = self._post("state/create_or_update", body)
+        if isinstance(data, dict):
+            return data
+        return {}

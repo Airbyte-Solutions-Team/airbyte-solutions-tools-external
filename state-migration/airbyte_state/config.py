@@ -23,6 +23,9 @@ class EnvironmentConfig:
     client_id: str
     client_secret: str
     config_api_root: Optional[str] = None
+    legacy_install: bool = False
+    basic_auth_username: Optional[str] = "airbyte"
+    basic_auth_password: Optional[str] = "password"
 
 
 @dataclass(frozen=True)
@@ -48,6 +51,11 @@ _REQUIRED_ENV_FIELDS = (
     "workspace_id",
     "client_id",
     "client_secret",
+)
+
+_REQUIRED_LEGACY_ENV_FIELDS = (
+    "config_api_root",
+    "workspace_id",
 )
 
 _VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
@@ -106,16 +114,26 @@ def _parse_env(
     else:
         merged["config_api_root"] = _normalize_config_api_root(str(merged["config_api_root"]))
 
-    missing = [k for k in _REQUIRED_ENV_FIELDS if not merged.get(k)]
-    if missing:
-        raise ConfigError(f"'{label}' section missing required field(s): {missing}")
+    legacy_install = _as_bool(merged.get("legacy_install"), f"{label}.legacy_install")
+
+    if legacy_install:
+        missing = [k for k in _REQUIRED_LEGACY_ENV_FIELDS if not merged.get(k)]
+        if missing:
+            raise ConfigError(f"'{label}' section (legacy_install) missing required field(s): {missing}")
+    else:
+        missing = [k for k in _REQUIRED_ENV_FIELDS if not merged.get(k)]
+        if missing:
+            raise ConfigError(f"'{label}' section missing required field(s): {missing}")
 
     return EnvironmentConfig(
-        api_root=str(merged["api_root"]),
+        api_root=str(merged.get("api_root") or ""),
         workspace_id=str(merged["workspace_id"]),
-        client_id=str(merged["client_id"]),
-        client_secret=str(merged["client_secret"]),
+        client_id=str(merged.get("client_id") or ""),
+        client_secret=str(merged.get("client_secret") or ""),
         config_api_root=_optional_str(merged.get("config_api_root")),
+        legacy_install=legacy_install,
+        basic_auth_username=_optional_str(merged.get("basic_auth_username")) or "airbyte",
+        basic_auth_password=_optional_str(merged.get("basic_auth_password")) or "password",
     )
 
 
