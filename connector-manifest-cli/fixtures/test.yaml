@@ -1,0 +1,57 @@
+version: 7.17.1
+
+type: DeclarativeSource
+
+check:
+  type: CheckStream
+  stream_names:
+    - posts
+
+streams:
+  - type: DeclarativeStream
+    name: posts
+    retriever:
+      type: SimpleRetriever
+      requester:
+        type: HttpRequester
+        url: https://jsonplaceholder.typicode.com/posts
+        http_method: GET
+        request_headers:
+          Content-Type: application/json
+      record_selector:
+        type: RecordSelector
+        extractor:
+          type: DpathExtractor
+          field_path: []
+
+    primary_key:
+      - id
+
+    schema_loader:
+      type: InlineSchemaLoader
+      schema:
+        type: object
+        $schema: http://json-schema.org/draft-07/schema#
+        properties:
+          userId:
+            type: integer
+          id:
+            type: integer
+          title:
+            type: string
+          body:
+            type: string
+
+spec:
+  type: Spec
+  documentation_url: https://example.com
+  connection_specification:
+    type: object
+    $schema: http://json-schema.org/draft-07/schema#
+    required: []
+    properties: {}
+    additionalProperties: true
+
+concurrency_level:
+  type: ConcurrencyLevel
+  default_concurrency: 1
