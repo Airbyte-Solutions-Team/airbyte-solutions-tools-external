@@ -23,7 +23,7 @@ The CLI accepts connector configuration as JSON. Treat credentials as regular co
 Use inline JSON:
 
 ```bash
-python connector-manifest-cli test --manifest fixtures/test.yaml --stream debug_company --config-json '{}'
+python connector-manifest-cli test --manifest fixtures/test.yaml --stream posts --config-json '{}'
 ```
 
 Or use a JSON file:
@@ -48,7 +48,7 @@ The tool injects the manifest into the connector config under Airbyte CDK's `__i
 Validate the provided fixture:
 
 ```bash
-python connector-manifest-cli test --manifest fixtures/test.yaml --stream debug_company --config-json '{}'
+python connector-manifest-cli test --manifest fixtures/test.yaml --stream posts --config-json '{}'
 ```
 
 The stream argument is required and matches the UI flow of testing one stream at a time.
@@ -56,7 +56,7 @@ The stream argument is required and matches the UI flow of testing one stream at
 Run a read after validation:
 
 ```bash
-python connector-manifest-cli test --manifest fixtures/test.yaml --stream debug_company --config-json '{}' --read
+python connector-manifest-cli test --manifest fixtures/test.yaml --stream posts --config-json '{}' --read
 ```
 
 `--read` may call external APIs. Omit it when you only want to validate that the manifest can be loaded by the CDK.
@@ -66,7 +66,7 @@ After a read, the CLI runs schema inference against the records it received. Thi
 By default, read output is formatted for humans. To print raw messages from the CDK library as JSON instead, add `--json-output`:
 
 ```bash
-python connector-manifest-cli test --manifest fixtures/test.yaml --stream debug_company --config-json '{}' --read --json-output
+python connector-manifest-cli test --manifest fixtures/test.yaml --stream posts --config-json '{}' --read --json-output
 ```
 
 Manifest validation errors are summarized by default so that schema mistakes are easier to read. Add `--show-traceback` to print the full Python traceback when debugging.
@@ -80,7 +80,7 @@ python connector-manifest-cli convert fixtures/test.yaml --output fixtures/test.
 Convert JSON back to YAML:
 
 ```bash
-python connector-manifest-cli convert fixtures/test.json --output fixtures/test.yaml
+python connector-manifest-cli convert fixtures/test.json --output /tmp/test.yaml
 ```
 
 If `--output` is omitted, converted content is written to stdout. The converter infers formats from file extensions by default. Use `--from-format` or `--to-format` when an extension is ambiguous.
@@ -114,11 +114,11 @@ If `--output` is omitted, converted content is written to stdout. The converter 
 Use the included fixture for a local validation check:
 
 ```bash
-python connector-manifest-cli test --manifest fixtures/test.yaml --stream debug_company --config-json '{}'
+python connector-manifest-cli test --manifest fixtures/test.yaml --stream posts --config-json '{}'
 ```
 
 Expected output:
 
 ```text
-Manifest validated OK: fixtures/test.yaml (debug_company)
+Manifest validated OK: fixtures/test.yaml (posts)
 ```
