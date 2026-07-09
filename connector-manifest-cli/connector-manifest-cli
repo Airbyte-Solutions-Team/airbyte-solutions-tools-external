@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+"""CLI entry point for connector manifest tooling."""
+
+from __future__ import annotations
+
+from connector_manifest_cli.cli import main
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
